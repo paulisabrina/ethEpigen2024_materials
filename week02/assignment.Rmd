@@ -1,0 +1,64 @@
+---
+title: "Week02"
+author: "Paula Iller"
+date: "2024-03-01"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(ensembldb)
+  library(GenomicRanges)
+  library(epiwraps)
+  library(ggplot2)
+})
+
+```
+
+
+```{r}
+ah <- AnnotationHub()
+# Finding here Annotations and downloading data
+
+query(ah, c("Mus musculus","102","GRCm38","EnsDb")) # searching here object in records
+mouse_EnsDb <- ah[["AH89211"]] # Downloading here the annotation
+class(mouse_EnsDb)
+g_mouse <- genes(mouse_EnsDb) # 118 sequences
+
+query(ah, c("Mus musculus","Sequence","GRCm38", "dna_sm", "TwoBitFile"))
+mouse_2Bit <- ah[["AH49775"]] # Downloading here the annotation
+
+query(ah, c("Drosophila melanogaster", "dna_sm", "BDGP6"))
+drosophila_2Bit <- ah[["AH49674"]] # Downloading here the annotation
+```
+
+
+```{r}
+
+# How many gene symbols are there for protein-coding genes?
+pcg <- g_mouse[which(g_mouse$gene_biotype == "protein_coding")]
+#table(pcg)
+length (pcg) # result 22287
+
+
+# Plot the distribution of the splices length of protein-coding transcripts
+
+## 1. extract exons of protein-coding transcript from database
+ex_mouse <- exons(mouse_EnsDb) #give us a list of axons position of axon in the transcript 
+#head(mouse_EnsDb)
+
+## 2. Split them by transcript
+exPerTx <- exonsBy(mouse_EnsDb,column=c("tx_biotype"),
+                    filter = TxBiotypeFilter("protein_coding"))
+
+## 3. Summing the width of the exons of each transcript and plot it 
+ggplot(data.frame(length = lengths(exPerTx)), aes(x = length)) +
+  geom_histogram() +
+  scale_x_log10() +
+  labs(
+    title = "Distribution of Spliced Length of Protein-Coding Transcripts",
+    x = "Transcript Length",
+    y = "Frequency")
+
+```
