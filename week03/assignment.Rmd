@@ -1,0 +1,75 @@
+---
+title: "assignment"
+author: "Paula Iller"
+date: "2024-03-12"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(Rsubread)
+  library(rtracklayer)
+  library(Biostrings)
+  library(Rfastp)
+  library(epiwraps)
+  library(ShortRead)
+})
+ah <- AnnotationHub()
+```
+
+# Building a genome index for mapping
+```{r, eval=FALSE}
+ah1 <- query(ah, c("Drosophila melanogaster", "fasta"))
+genome <- ah1[["AH49674"]]
+getSeq(genome)
+
+# Read in raw data 
+options(timeout=3600)
+dir.create("raw")
+download.file("https://www.encodeproject.org/files/ENCFF127RRR/@@download/ENCFF127RRR.fastq.gz", dest="/Users/paulailler/Documents/ETH/Master/Bioinformatics/ethEpigen2024_materials/input.fastq.gz", mode = "wb") 
+```
+
+# Reads QC
+
+```{bash engine.opts='-l', eval=FALSE}
+mkdir -p raw
+wget -O raw/input.fastq.gz
+https://www.encodeproject.org/files/ENCFF127RRR/@@download/ENCFF127RRR.fastq.gz
+fastqc -o raw raw/*.fastq.gz
+```
+# trimming using R:
+
+```{r}
+dir.create("rfastp.trimmed")
+
+fastq_files <- (input="raw/raw/input.fastq.gz")
+
+qc <- lapply(input="raw/input.fastq.gz", FUN = function(x) {
+  Rfastp::rfastp(x, thread=4, overrepresentationAnalysis=TRUE,
+                 outputFastq=file.path("rfastp.trimmed/",gsub("\\.fastq\\.gz$","",basename(x))))
+})
+
+```
+
+# Alignment
+```{r}
+parallel::detectCores()
+dir.create("aligned") # all identified in that directory 
+align.stats <- Rsubread::align(index="BDGP6_genome/rsubread", 
+                               type="dna", # only work with dna and specify input and output 
+                               readfile1=c("rfastp.trimmed/Myc_R1.fastq.gz", 
+                                           "rfastp.trimmed/input_R1.fastq.gz"),
+                               output_file=c("aligned/Myc.bam","aligned/input.bam"),
+                               nthreads=6, sortReadsByCoordinates=TRUE)
+align.stats
+```
+```{r}
+# peak 141 from the epiwraps peak, or peak 3246 from the macs peaks, or:
+myGreatPeak <- 
+
+plotSignalTracks(Input="aligned/input.bam", region=myGreatPeak,
+                 extend=1000, tracks.params=list(ylim=c(0,50)))
+```
+
+
