@@ -1,0 +1,56 @@
+---
+title: "Assignment"
+author: "Paula Iller"
+date: "2024-04-11"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(ensembldb)
+  library(epiwraps)
+  library(rtracklayer)
+  library(GenomicRanges)
+  library(ggplot2)
+})
+```
+
+```{r}
+# mESC
+download.file("https://www.encodeproject.org/files/ENCFF008XKX/@@download/ENCFF008XKX.bed.gz", 
+              destfile="mESC_H3K27me3.bed.gz", mode="wb")
+download.file("https://www.encodeproject.org/files/ENCFF974BMC/@@download/ENCFF974BMC.bed.gz", 
+              destfile="mESC_H3K4me3.bed.gz", mode="wb")
+download.file("https://www.encodeproject.org/files/ENCFF326VMV/@@download/ENCFF326VMV.bed.gz", 
+              destfile="NPC_H3K27me3.bed.gz", mode="wb")
+download.file("https://www.encodeproject.org/files/ENCFF944EDY/@@download/ENCFF944EDY.bed.gz", 
+              destfile="NPC_H3K4me3.bed.gz", mode="wb")
+
+mESC_H3K27me3 <- import("mESC_H3K27me3.bed.gz", format="narrowPeak")
+mESC_H3K4me3 <- import("mESC_H3K4me3.bed.gz", format="narrowPeak")
+
+NPC_H3K27me3 <- import("NPC_H3K27me3.bed.gz", format="narrowPeak")
+NPC_H3K4me3 <- import("NPC_H3K4me3.bed.gz", format="narrowPeak")
+
+```
+
+```{r}
+# Identifying mESC bivalent domains
+overlap_indices <- findOverlaps(mESC_H3K4me3, mESC_H3K27me3)
+bivalent_mESC <- mESC_H3K4me3[queryHits(overlap_indices), ]
+
+# Compare bivalent domains in mESC with markers in neural progenitors
+overlap_NPC_H3K27me3 <- findOverlaps(bivalent_mESC, NPC_H3K27me3)
+overlap_NPC_H3K4me3 <- findOverlaps(bivalent_mESC, NPC_H3K4me3)
+
+# Count and report the number of overlaps
+num_overlaps_NPC_H3K27me3 <- length(unique(queryHits(overlap_NPC_H3K27me3)))
+num_overlaps_NPC_H3K4me3 <- length(unique(queryHits(overlap_NPC_H3K4me3)))
+combined_overlaps <- intersect(queryHits(overlap_NPC_H3K27me3), queryHits(overlap_NPC_H3K4me3))
+
+# Print results
+print(paste("Number of mESC bivalent domains overlapping with H3K27me3 in NPCs:", num_overlaps_NPC_H3K27me3))
+print(paste("Number of mESC bivalent domains overlapping with H3K4me3 in NPCs:", num_overlaps_NPC_H3K4me3))
+print(paste("Number of mESC bivalent domains overlapping with both marks in NPCs:", length(combined_overlaps)))
+```
