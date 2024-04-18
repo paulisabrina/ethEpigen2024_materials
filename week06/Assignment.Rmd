@@ -1,0 +1,68 @@
+---
+title: "Assignment"
+author: "Paula Iller"
+date: "2024-04-18"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(GenomicRanges)
+  library(ggplot2)
+  #library(memes) # for the meme-based methods -- COMMENT OUT when using alternatives
+  library(motifmatchr) # for scanning sequences for matches of given motifs
+  library(Biostrings) # for handling sequences
+  library(MotifDb) # database of motifs
+  library(TFBSTools) # for handling some motif formats
+  library(universalmotif) # for converting motifs to various formats
+  library(PWMEnrich) # for R-based motif enrichment analysis
+  library(rtracklayer)
+})
+ah <- AnnotationHub()
+```
+
+
+```{r}
+# Download the data myocytes
+
+download.file("https://www.encodeproject.org/files/ENCFF368VWJ/@@download/ENCFF368VWJ.bed.gz", dest="REST_TF_ChIPseq.bed.gz")
+peaks <- rtracklayer::import("REST_TF_ChIPseq.bed.gz", format="NarrowPeak")
+seqlevelsStyle(peaks) <- "Ensembl"  # to change the convention of the chromosome names to ensembl (i.e. without 'chr')
+peaks_chr1 <- peaks[seqnames(peaks)=="1"] # peak in chr1
+
+```
+
+```{r}
+
+# Resizing peaks to focus on center regions
+peak_centers <- resize(peaks_chr1, fix="center", width=100)
+
+# Load genome sequence
+ah <- AnnotationHub()
+genome <- ah[["AH68356"]]
+genome_seqs <- rtracklayer::import(genome)
+
+# Extract sequences at peak centers
+peak_seqs <- getSeq(genome_seqs, peak_centers)
+names(peak_seqs) <- as.character(granges(peak_centers))
+
+# Query and process REST motif
+motifs <- query(MotifDb, "REST")
+motif <- motifs[["Mmusculus-HOCOMOCOv10-REST_MOUSE.H10MO.A"]]
+motif2 <- convert_motifs(motif, class="TFBSTools-PFMatrix")
+
+# Scan for motif occurrences in peak sequences
+moi <- matchMotifs(motif2, subject=peak_seqs, genome=genome_seqs, out="positions")
+peaks_with_motif <- peaks_chr1[queryHits(moi)]
+
+# Display proportion of peaks with the motif
+cat(sprintf("Of the %d peaks, %d (%.2f%%) contain a motif.\n", length(peaks_chr1), length(peaks_with_motif), 100 * length(peaks_with_motif) / length(peaks_chr1)))
+
+# Scanning for motif occurrences across the entire genome for comparison
+genome_motif_hits <- matchMotifs(motif2, subject=genome_seqs, out="positions")
+motif_in_peaks <- genome_motif_hits[queryHits(moi)]
+
+# Display proportion of genome-wide motif instances overlapping with peaks
+cat(sprintf("Of the %d motif instances, %d (%.2f%%) overlap a peak.\n", length(genome_motif_hits), length(motif_in_peaks), 100 * length(motif_in_peaks) / length(genome_motif_hits)))
+```
