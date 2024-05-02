@@ -1,0 +1,129 @@
+---
+title: "assignment"
+author: "Paula Iller"
+date: "2024-05-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(motifmatchr)
+  library(MotifDb)
+  library(universalmotif)
+  library(ggplot2)
+  library(SummarizedExperiment) 
+  library(sechm)
+  library(BiocParallel)
+  library(chromVAR)
+  library(limma) 
+  library(AnnotationHub)
+  library(Biostrings)
+  library(TFBSTools)
+})
+ah <- AnnotationHub()
+#BiocManager::install("ETHZ-INS/epiwraps", force = TRUE) 
+
+register(MulticoreParam(4))
+
+```
+
+
+```{r}
+## Download the data
+options(timeout=6000)
+download.file("https://ethz-ins.org/content/mouse_mm38_hippocampus.peakCounts.SE.rds", "mouse_mm38_hippocampus.peakCounts.SE.rds")
+se <- readRDS("mouse_mm38_hippocampus.peakCounts.SE.rds")
+genome <- BSgenome.Mmusculus.UCSC.mm10::BSgenome.Mmusculus.UCSC.mm10
+seqlevelsStyle(se) = "UCSC"
+```
+
+```{r}
+se$condition = rep(c("control", "FSS"), each=6)
+se$sex = rep(rep(c("female", "male"), each=3),2)
+row.names(se) <- as.character(granges(se))
+
+se <- suppressWarnings(chromVAR::addGCBias(se, genome=genome))
+
+library(MotifDb)
+motifs <- MotifDb::query(MotifDb, c("HOCOMOCOv10", "Mmusculus"))
+motifs <- do.call(TFBSTools::PWMatrixList, setNames(
+           universalmotif::convert_motifs(motifs, class="TFBSTools-PWMatrix"),
+           mcols(motifs)$geneSymbol))
+
+moi <- suppressWarnings(motifmatchr::matchMotifs(motifs, subject=se, genome=genome))
+
+# for each peak, we identify similar peaks as background
+set.seed(123)
+bg <- bg <- chromVAR::getBackgroundPeaks(se, niterations=1000)
+dev <- chromVAR::computeDeviations(object = se, annotations=moi, background_peaks=bg)
+head(assays(dev)$z)
+assays(dev)$norm <- scale(assays(dev)$z)
+```
+
+## Differential analysis 
+
+```{r}
+#between conditions
+dev$condition <- factor(dev$condition, levels = c("control", "FSS"))
+dev$condition <- factor(dev$condition)
+dev$condition <- relevel(dev$condition, "control")
+
+
+mm_cond <- model.matrix(~dev$condition)
+mm_cond
+
+
+fit_cond <- limma::eBayes(limma::lmFit(object = assays(dev)$z, design = mm_cond))
+res_cond <- as.data.frame(limma::topTable(fit_cond, coef=2, number = Inf))
+res_cond <- res_cond[duplicated(res_cond["ID"]),] # remove duplicates
+row.names(res_cond) <- res_cond$ID
+res_cond$TF <- row.names(res_cond)
+
+
+ggplot(res_cond, aes(logFC, -log10(adj.P.Val), label=TF)) + geom_text()
+#top_cond <- head(res_cond[res_cond$adj.P.Val<=0.5,], 50)
+sechm(dev, features = row.names(res_cond), assayName="norm", top_annotation = c("condition", "depth"))
+
+# Inspect most significant motifs
+res_cond[head(row.names(res_cond)),]
+view_motifs(motifs[head(row.names(res_cond))])
+```
+
+```{r}
+dev$sex <- factor(dev$sex, levels = c("female", "male"))
+dev$sex <- factor(dev$sex)
+dev$sex <- relevel(dev$sex, ref = "female")
+
+
+mm_sex <- model.matrix(~sex, data=as.data.frame(colData(dev)))
+mm_sex
+
+fit_sex <- limma::eBayes(limma::lmFit(assays(dev)$norm, mm_sex))
+fit_sex$F.p.value[fit_sex$F.p.value < 0.05]
+
+
+res_sex <- as.data.frame(limma::topTable(fit_sex, coef=2, number = Inf))
+res_sex <- res_sex[duplicated(res_sex["ID"]),] # remove duplicates
+row.names(res_sex) <- res_sex$ID
+res_sex$TF <- row.names(res_sex)
+head(res_sex)
+
+
+res_sex$TF <- row.names(res_sex)
+n_significant_sex <- sum(res_sex$adj.P.Val < 0.05)
+print(paste(n_significant_sex, "significant motifs based on sex"))
+ggplot(res_sex, aes(logFC, -log10(adj.P.Val), label=TF)) + geom_text() 
+#top_sex <- head(res_sex[res_sex$adj.P.Val<=0.5,], 50)
+
+sechm(dev, features = row.names(res_sex), assayName="norm", top_annotation = c("sex", "depth"))
+
+# Inspect most significant motifs
+res_sex[head(row.names(res_sex)),]
+view_motifs(motifs[head(row.names(res_sex))])
+```
+
+
