@@ -1,0 +1,83 @@
+---
+title: "Project Proposal"
+author: "Zhihan Zhu, Paula Iller"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Topic
+
+Comparison of the Binding of the Glucocorticoid Receptor (GR), JUN, and JUNB in a Cell Line Upon Treatment with a GR-Activating Drug
+
+## Background
+
+Glucocorticoids (GCs) are influential steroid hormones that orchestrate a wide array of physiological responses including the regulation of immunity and metabolism. Their effects are mediated through the glucocorticoid receptor (GR), a transcription factor that modulates gene expression by binding to specific genomic sites. Traditional models of GR action emphasize the role of DNA accessibility in determining binding sites. However, emerging research suggests that other genomic features such as transcription factor (TF) co-occupancy, histone modifications, and the broader chromatin landscape also significantly influence GR binding and activity. Understanding the interplay between GR and other transcription factors such as JUN and JUNB, particularly under conditions of glucocorticoid stimulation, is critical for elucidating the complexities of hormone signaling in cellular contexts.
+Dataset: This project will utilize existing high-quality ChIP-seq and DNase-seq datasets published by  (Ian C. McDowell et al), tracking the dynamics of  (1) TF occupancy by ChIP-seq, (2) chromatin accessibility by DNase-seq across a 12-h time course of GC exposure in a well-studied human epithelial lung cell line A549. The focus will be on the transcription factors JUN and JUNB, alongside GR, to analyze their interactions and the resulting genomic effects.
+
+## Objectives
+
+(1) To analyze the binding dynamics of GR, JUN, and JUNB following glucocorticoid treatment in A549 cells.
+
+(2) To determine the genomic and epigenomic factors influencing the binding specificity of GR in the presence of JUN and JUNB.
+
+(3) To correlate changes in TF binding with alterations in gene expression and chromatin state, thereby elucidating potential mechanisms of transcriptional regulation by GR under glucocorticoid influence.
+
+## Methods
+
+### Preprocessing:
+
+(1) Quality Control.
+
+(2) Alignment.
+
+(3) Normalization.
+
+### Peak Calling and Explorations:
+
+(1) Peak Identification.
+
+(2) Annotation.
+
+(3) Exploratory Data Analysis.
+
+### Changes in TF Bindings and Chromatin Accessibility (Fig. 1C):
+
+(1) Temporal Analysis.
+
+(2) Statistical Testing.
+
+### Pairwise Comparisons Across TFs and DNase I Hypersensitive Sites (DHS) (Fig. 1F):
+
+(1) Co-occurrence Analysis.
+
+(2) Jaccard Index.
+
+### Correlation Analysis (Fig. 1G):
+
+(1) Correlation Metrics: Compute Pearson correlation coefficients to measure the relationship in log2 fold changes in binding among TFs within distal non-EP300-bound DHSs and enhancers.
+
+(2) Heatmaps and Clustering: Visualize correlations using heatmaps and perform hierarchical clustering to discern patterns of TF interactions.
+
+### Temporal Binding Dynamics of GR (Fig. 2A orange):
+
+(1) Longitudinal Analysis: Track the mean log2 fold change in GR binding within enhancers across the time course of the experiment.
+
+(2) Visualization: Generate line plots or area plots to display trends in GR binding over time.
+
+### Overlap Analysis of Early and Late GR Binding Sites [if necessary]:
+
+(1) Overlap Quantification: Determine the overlap between GR binding sites identified at early versus late dex exposure time points to assess the stability and persistence of binding sites.
+
+### Chromatin Accessibility Profiling (Fig. 2D):
+
+(1) Heatmap Visualization: Create heatmaps showing DNase-seq and input-subtracted ChIP-seq signals in reads per million (RPM) to compare chromatin accessibility in matched distal non-EP300-/non-CTCF-bound preprogrammed DHSs and preprogrammed EP300 sites.
+
+(2) Differential Accessibility Analysis: Analyze changes in chromatin structure in response to TF binding and hormone treatment.
+
+## Reference:
+
+McDowell I C, Barrera A, D'Ippolito A M, et al. Glucocorticoid receptor recruits to enhancers and drives activation by motif-directed binding[J]. Genome research, 2018, 28(9): 1272-1284.
