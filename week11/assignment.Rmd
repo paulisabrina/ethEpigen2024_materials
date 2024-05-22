@@ -1,0 +1,138 @@
+---
+title: "assignment"
+author: "Paula Iller"
+date: "2024-05-21"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(epiwraps)
+  library(ggplot2)
+  library(rGREAT)
+  library(AnnotationHub)
+  library(ensembldb)
+  library(bsseq)
+  library(BiocParallel)
+  library(edgeR)
+  library(DMRcate)
+  library(rtracklayer)
+  library(sechm)
+  library(pheatmap)
+  library(viridis)
+  library(data.table)
+})
+ah <- AnnotationHub()
+set.seed(40)
+```
+
+
+```{r, download, eval=FALSE}
+#Dowonload:
+options(timeout = 6000)
+download.file("https://ethz-ins.org/content/w11_practical.zip", "w11_practical.zip")
+dir.create("./w11_practical")
+unzip("w11_practical.zip", exdir="./w11_practical")
+```
+
+```{r, bsseq}
+bs <- readRDS("./w11_practical/bs.rds")
+
+rowRanges(bs)
+pData(bs)
+```
+
+### Testing
+
+Get annotations (hs):
+```{r}
+# genes
+ensdb <- ah[["AH109336"]]
+chr22 <-  GRanges(seqnames=Rle(c("22")), 
+                  ranges = IRanges(1, end=50818468))
+genesChr22 <- genes(ensdb, columns=c("gene_seq_start", "gene_seq_end", "gene_name"),
+                    filter=GRangesFilter(chr22))
+seqlevelsStyle(genesChr22) <- "UCSC"
+
+# promoters
+tssMargin <- 200
+promotersChr22 <- promoters(ensdb, upstream=tssMargin, downstream=tssMargin,
+                             filter=GRangesFilter(chr22), columns=c("gene_name"))
+seqlevelsStyle(promotersChr22) <- "UCSC"
+```
+
+## Get methylation of the genes
+
+```{r, calculate methlyation}
+metPr <- bsseq::getMeth(bs, 
+                        regions=genesChr22, 
+                        what="perRegion")
+colnames(metPr) <- colnames(bs)
+rownames(metPr) <- genesChr22$gene_name
+metPr <- metPr[!is.na(rowSums(metPr)),]
+
+annotation <- as.data.frame(pData(bs)[,c("Type","Pair")])
+rownames(annotation) <- colnames(metPr)
+
+pheatmap(metPr, cluster_rows = TRUE,
+                   cluster_cols = FALSE,
+                   annotation_col = annotation,
+                   show_rownames = TRUE,
+                   color = rocket(10))
+
+```
+
+Differential methylation testing: 
+```{r, dm testing}
+# design matrix
+design <- model.matrix(~Type+Pair, data=pData(bs)) 
+methdesign <- modelMatrixMeth(design)
+seqAnnot <- sequencing.annotate(bs, methdesign, all.cov=TRUE, coef="Typenormal")
+
+dmrcateRes <- dmrcate(seqAnnot, C=2, min.cpgs = 10, pcutoff=0.01)
+
+# Extract differentially methylated regions (DMRs)
+dmrRanges <- extractRanges(dmrcateRes, genome="hg38")
+saveRDS(dmrRanges, "./w11_practical/dmr.rds")
+DMR.plot(dmrRanges, dmr=1, phen.col=c(rep("#E69F00", 3),
+                                      rep("#56B4E9", 3)), 
+         group.means=TRUE,
+         CpGs=bs, genome="hg38")
+
+dmrRangesGenes <- dmrRanges[!is.na(dmrRanges$overlapping.genes)]
+```
+
+Obtain the coordinates of the genes within DMRs. 
+```{r, get the DM genes}
+# Get the genes within Differentially methylated regions
+topIdx <- order(dmrRangesGenes$min_smoothed_fdr)[1:4]
+genesDmr <- unlist(tstrsplit(dmrRangesGenes[topIdx]$overlapping.genes, split=", "))
+genesDmr <- genesDmr[!is.na(genesDmr)]
+dmrGenes <- genesChr22[genesChr22$gene_name %in% genesDmr]
+dmrGenes
+```
+
+# Enrichment analysis (rGREAT) 
+
+```{r, GREAT job}
+job <- submitGreatJob(gr=dmrGenes, bg=genesChr22, species="hg38")
+res <- getEnrichmentTables(job)
+names(res)
+
+bp <- res$`GO Biological Process`
+head(bp)
+
+ggplot(head(bp,15), aes(Hyper_Fold_Enrichment, reorder(name, Hyper_Adjp_BH), size=Hyper_Foreground_Region_Hits, color=-log10(Hyper_Adjp_BH))) + geom_point() + scale_color_viridis_c(limits =c(0, 5))
+```
+
+
+
+
+
+
+
+# Enrichment Analysis results 
+
+The first part of the analysis involving 3 patients with colon cancer and 3 healthy colon was generating a heatmap to visualize the methylation levels of genes located within the differentially methylated regions (DMRs) on chromosome 22.From the heatmap, we can observe clustering patterns that differentiate between cancer and normal samples, indicating significant differences in methylation levels between these two conditions. This visualization helps identify specific genes that show altered methylation in cancer compared to normal samples. With the enrichment analysis using rGREAT tests we can look at overrepresentation of biological processes among the genes located within the DMRs, which can be observed in our plot. Here we see that the biological process of cell-cell adhesion via plasma-membrane adhesion molecules is notably enriched compared to all the others, suggesting a more important role of differential methylation in cell adhesion mechanisms, which could be crucial in cancer metastasis. But in general the insight of this plots provides a deeper understanding of the molecular mechanisms that may be affected by altered methylation patterns in cancer.
+
