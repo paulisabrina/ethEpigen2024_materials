@@ -1,0 +1,92 @@
+---
+title: "assignment"
+author: "Paula Iller"
+date: "2024-05-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#BiocManager::install("ETHZ-INS/epiwraps")
+#BiocManager::install("rGREAT")
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(epiwraps)
+  library(ggplot2)
+  library(rGREAT)
+})
+
+```
+
+```{r, eval=FALSE}
+# Download and decompress the following archive
+options(timeout = 6000)
+download.file("https://ethz-ins.org/content/w10.assignment.zip", "w10.assignment.zip")
+unzip("w10.assignment.zip")
+list.files()
+```
+
+
+```{r}
+set.seed(123)  # to ensure that it gives the same results everytime
+
+# prepare regions and tracks
+tracks <- list.files(pattern="bw$")
+region_files <- list.files(pattern="bed$")
+peaks <- lapply(region_files, FUN=rtracklayer::import.bed)
+peaks <- lapply(peaks, FUN=function(x) x[x$score>800])
+regions <- reduce(unlist(GRangesList(peaks)))
+
+# plot
+ml <- signal2Matrix(tracks, regions, extend=2000)
+# Choosing a meaningful number of clusters
+multi_cl <- clusterSignalMatrices(ml, k=2:10)
+ggplot(multi_cl$varExplained, aes(k, varExplained)) + geom_line()
+plotEnrichedHeatmaps(ml)
+
+# Clustering
+cl <- clusterSignalMatrices(ml, k=4) # choose k according to previous plot
+table(cl)
+head(cl)
+length(cl)
+length(regions)
+regions$cluster <- cl
+
+# Plot clusters with colors
+mycolors <- c("1"="red", "2"="blue", "3"="darkgreen", "4"="darkviolet")
+plotEnrichedHeatmaps(ml, row_split=cl, mean_color=mycolors)
+
+# Plotting averages
+d <- meltSignals(ml, splitBy=cl)
+ggplot(d, aes(position, mean, colour=sample)) + geom_line(size=1.2) + facet_wrap(~split)
+```
+Plot with the 4 Clusters. 
+Cluster 1: shows narrow peaks for Creb1 and Creb3L1 with lower signal for Creb3.
+Cluster 2: displays broad peaks, particularly for Creb3L1, indicating extended regions of signal enrichment.
+Cluster 3: has well-defined peaks for Creb1, Creb3, and a stronger signal for Creb3L1.
+Cluster 4: shows sharp peaks with strong signals for Creb3L1 and notable peaks for Creb1 and Creb3.
+
+```{r, fig.width=10, fig.height=6}
+# we first split the regions by cluster:
+split_regions <- split(regions, cl)
+# we send the data to the GREAT server to run an enrichment analysis
+#We focus on cluster 3
+job <- submitGreatJob(gr=split_regions[["3"]], bg=regions, species="hg38")
+res <- getEnrichmentTables(job)
+res
+bp <- res$`GO Molecular Function`
+head(bp)
+bp
+
+ggplot(head(bp,15), aes(Hyper_Fold_Enrichment, reorder(name, Hyper_Adjp_BH), size=Hyper_Foreground_Region_Hits, color=-log10(Hyper_Adjp_BH))) + geom_point() + scale_color_viridis_c()
+
+```
+
+# Results
+The clustering analysis identified four distinct clusters with enrichment patterns. Cluster 3, in particular, showed strong peaks for Creb1, Creb3, and Creb3L1, indicating a significant biological role. 
+The enrichment analysis for Cluster 3 revealed several molecular functions related to protein binding and DNA interaction, suggesting these regions may play crucial roles in protein signaling and genomic stability. The results provide insights into the molecular activities associated with specific clusters, particularly highlighting the importance of protein binding and signaling functions in Cluster 3. 
+
+
