@@ -1,0 +1,75 @@
+---
+title: "assignment"
+author: "Paula Iller"
+date: "2024-05-24"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(AnnotationHub)
+  library(ensembldb)
+  library(InteractionSet)
+})
+```
+
+# Download data 
+
+```{r}
+options(timeout = 10000)
+# p300 peaks in cells:
+download.file("https://www.encodeproject.org/files/ENCFF776TFX/@@download/ENCFF776TFX.bed.gz", "p300.narrowPeak.gz")
+download.file("https://ethz-ins.org/content/hg38.SalviatoDistalEnhancerTargets.GR.rds", "salviato.rds")
+
+peaks <- rtracklayer::import("p300.narrowPeak.gz")
+seqlevelsStyle(peaks) = "ensembl"
+targetSalviato <- readRDS("salviato.rds")
+seqlevelsStyle(targetSalviato) = "ensembl"
+
+hubCache(AnnotationHub())
+ah <- AnnotationHub()
+ensdb <- ah[["AH95744"]]
+
+annotatedPeaks <- epiwraps::annotateRegions(peaks, ensdb)
+
+head(annotatedPeaks)
+```
+
+```{r}
+# Extend the TSS regions between 2.5kb and 10kb
+p1 <- promoters(targetSalviato, 2500, 10000)
+peaks$overlapsP1 <- overlapsAny(peaks, p1)
+peaksP1 <- peaks[peaks$overlapsP1]
+peaksP1 
+```
+```{r}
+# Extend the TSS regions over 10kb
+p2 <- promoters(targetSalviato, 10000)
+peaks$overlapsP2 <- overlapsAny(peaks, p2)
+peaksP2 <- peaks[peaks$overlapsP2]
+peaksP2 
+```
+```
+
+```{r}
+# find overlaps
+o1 <- findOverlaps(peaksP1, targetSalviato)
+head(o1)
+mcols(peaksP1)[from(o1),"target"] <- targetSalviato[to(o1)]$target
+mcols(peaksP1)$target <- CharacterList(mcols(peaksP1)$target)
+TSS1 <- round((length(peaksP1) / length(targetSalviato)), digits = 4)
+
+
+o2 <- findOverlaps(peaksP2, targetSalviato)
+head(o2)
+mcols(peaksP2)[from(o2),"target"] <- targetSalviato[to(o2)]$target
+mcols(peaksP2)$target <- CharacterList(mcols(peaksP2)$target)
+TSS2 <- round((length(peaksP2) / length(targetSalviato)), digits = 4)
+```
+
+```{r}
+paste("Of the genes that are between 2.5 and 10kb from the nearest TSS,", TSS1 ,"% form an interaction with that nearest gene. Of the genes that are more than 10kb away from the nearest TSS, ",TSS2 ,"% form an interaction with that nearest gene.")
+```
+
+
